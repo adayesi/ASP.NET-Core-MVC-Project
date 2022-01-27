@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Threading.Tasks;
-using E_Commerce.Models;
+using Models;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
+using Utility;
 
 namespace E_Commerce.Areas.Identity.Pages.Account
 {
@@ -65,18 +66,15 @@ namespace E_Commerce.Areas.Identity.Pages.Account
             [Compare("Password", ErrorMessage = "The password and confirmation password do not match.")]
             public string ConfirmPassword { get; set; }
 
+            [Required]
             public string FullName { get; set; }
+            [Required]
             public string PhoneNumber { get; set; }
         }
 
         public async Task OnGetAsync(string returnUrl = null)
         {
 
-            if (!await _roleManager.RoleExistsAsync(WebConstant.AdminRole))
-            {
-                await _roleManager.CreateAsync(new IdentityRole(WebConstant.AdminRole));
-                await _roleManager.CreateAsync(new IdentityRole(WebConstant.CustomerRole));
-            }
             ReturnUrl = returnUrl;
             ExternalLogins = (await _signInManager.GetExternalAuthenticationSchemesAsync()).ToList();
         }
@@ -118,16 +116,20 @@ namespace E_Commerce.Areas.Identity.Pages.Account
                     {
                         return RedirectToPage("RegisterConfirmation", new { email = Input.Email, returnUrl = returnUrl });
                     }
-
-                    if (!User.IsInRole(WebConstant.AdminRole))
-                    {
-                        await _signInManager.SignInAsync(user, isPersistent: false);
-                    }
                     else
                     {
-                        return RedirectToAction("Index");
+                        if (User.IsInRole(WebConstant.AdminRole))
+                        {
+                            TempData[WebConstant.Success] = user.FullName + " has been registered";
+                            return RedirectToAction("Index", "Home");
+                        }
+                        else
+                        {
+                            await _signInManager.SignInAsync(user, isPersistent: false);
+                            return LocalRedirect(returnUrl);
+                        }
+
                     }
-                    return LocalRedirect(returnUrl);
                 }
                 foreach (var error in result.Errors)
                 {

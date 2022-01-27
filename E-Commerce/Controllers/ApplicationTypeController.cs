@@ -3,32 +3,35 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using E_Commerce.Data;
-using E_Commerce.Models;
+using DataAccess.Data;
 using Microsoft.AspNetCore.Authorization;
+using Models;
+using Utility;
+using DataAccess.Repository.IRepository;
 
 namespace E_Commerce.Controllers
 {
     [Authorize(Roles = WebConstant.AdminRole)]
     public class ApplicationTypeController : Controller
     {
+        private readonly IApplicationTypeRepository _appTypeRepo;
 
-        private readonly ApplicationDbContext _db;
-
-        public ApplicationTypeController(ApplicationDbContext db)
+        public ApplicationTypeController(IApplicationTypeRepository appTypeRepo)
         {
-            _db = db;
+            _appTypeRepo = appTypeRepo;
         }
+
+
         public IActionResult Index()
         {
-            IEnumerable<ApplicationType> objList = _db.ApplicationType;
+            IEnumerable<ApplicationType> objList = _appTypeRepo.GetAll();
             return View(objList);
         }
+
 
         //GET - CREATE
         public IActionResult Create()
         {
-
             return View();
         }
 
@@ -40,27 +43,24 @@ namespace E_Commerce.Controllers
         {
             if (ModelState.IsValid)
             {
-                _db.ApplicationType.Add(obj);
-                _db.SaveChanges();
+                _appTypeRepo.Add(obj);
+                _appTypeRepo.Save();
+                TempData[WebConstant.Success] = "Action completed successfully";
                 return RedirectToAction("Index");
             }
-
             return View(obj);
-
-
 
         }
 
 
-        //GET - Edit
+        //GET - EDIT
         public IActionResult Edit(int? id)
         {
             if (id == null || id == 0)
             {
                 return NotFound();
             }
-
-            var obj = _db.ApplicationType.Find(id);
+            var obj = _appTypeRepo.Find(id.GetValueOrDefault());
             if (obj == null)
             {
                 return NotFound();
@@ -69,7 +69,6 @@ namespace E_Commerce.Controllers
             return View(obj);
         }
 
-
         //POST - EDIT
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -77,14 +76,12 @@ namespace E_Commerce.Controllers
         {
             if (ModelState.IsValid)
             {
-                _db.ApplicationType.Update(obj);
-                _db.SaveChanges();
+                _appTypeRepo.Update(obj);
+                _appTypeRepo.Save();
+                TempData[WebConstant.Success] = "Action completed successfully";
                 return RedirectToAction("Index");
             }
-
             return View(obj);
-
-
 
         }
 
@@ -95,8 +92,7 @@ namespace E_Commerce.Controllers
             {
                 return NotFound();
             }
-
-            var obj = _db.ApplicationType.Find(id);
+            var obj = _appTypeRepo.Find(id.GetValueOrDefault());
             if (obj == null)
             {
                 return NotFound();
@@ -105,25 +101,24 @@ namespace E_Commerce.Controllers
             return View(obj);
         }
 
-
         //POST - DELETE
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult DeletePost(int? id)
         {
-            var obj = _db.ApplicationType.Find(id);
+            var obj = _appTypeRepo.Find(id.GetValueOrDefault());
             if (obj == null)
             {
                 return NotFound();
             }
-
-            _db.ApplicationType.Remove(obj);
-            _db.SaveChanges();
+            _appTypeRepo.Remove(obj);
+            _appTypeRepo.Save();
+            TempData[WebConstant.Success] = "Action completed successfully";
             return RedirectToAction("Index");
 
 
-
         }
+
     }
 
 }

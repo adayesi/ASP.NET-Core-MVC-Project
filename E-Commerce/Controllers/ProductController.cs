@@ -4,43 +4,47 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using E_Commerce.Data;
-using E_Commerce.Models;
-using E_Commerce.Models.ViewModels;
+using DataAccess.Data;
+using DataAccess.Repository.IRepository;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using Models;
+using Models.ViewModels;
+using Utility;
 
 namespace E_Commerce.Controllers
 {
     [Authorize(Roles = WebConstant.AdminRole)]
     public class ProductController : Controller
     {
-
-        private readonly ApplicationDbContext _db;
+        private readonly IProductRepository _prodRepo;
         private readonly IWebHostEnvironment _webHostEnvironment;
-
-        public ProductController(ApplicationDbContext db, IWebHostEnvironment webHostEnvironment)
+        public ProductController(IProductRepository prodRepo, IWebHostEnvironment webHostEnvironment)
         {
-            _db = db;
+            _prodRepo = prodRepo;
             _webHostEnvironment = webHostEnvironment;
         }
+
+
         public IActionResult Index()
         {
-            IEnumerable<Product> objList = _db.Product.Include(u => u.Category).Include(u => u.ApplicationType);
-            //foreach (var obj in objList)
+            IEnumerable<Product> objList = _prodRepo.GetAll(includeProperties: "Category,ApplicationType");
+
+            //foreach(var obj in objList)
             //{
-            //    obj.Category = _db.Category.FirstOrDefault(x => x.Id == obj.CategoryId);
-            //    obj.ApplicationType = _db.ApplicationType.FirstOrDefault(x => x.Id == obj.ApplicationTypeId);
+            //    obj.Category = _db.Category.FirstOrDefault(u => u.Id == obj.CategoryId);
+            //    obj.ApplicationType = _db.ApplicationType.FirstOrDefault(u => u.Id == obj.ApplicationTypeId);
             //};
-            
+
             return View(objList);
         }
 
-        //GET - UpSert
-        public IActionResult UpSert(int? id)
+
+        //GET - UPSERT
+        public IActionResult Upsert(int? id)
         {
 
             //IEnumerable<SelectListItem> CategoryDropDown = _db.Category.Select(i => new SelectListItem
@@ -52,53 +56,45 @@ namespace E_Commerce.Controllers
             ////ViewBag.CategoryDropDown = CategoryDropDown;
             //ViewData["CategoryDropDown"] = CategoryDropDown;
 
-           // Product product = new Product();
+            //Product product = new Product();
 
-           ProductVM productVm = new ProductVM()
-           {
-               Product = new Product(),
-               CategorySelectList = _db.Category.Select(i => new SelectListItem
-               {
-                   Text = i.Name,
-                   Value = i.Id.ToString()
-               }),
-               ApplicationTypeSelectList = _db.ApplicationType.Select(i => new SelectListItem
-               {
-                   Text = i.Name,
-                   Value = i.Id.ToString()
-               })
-           };
+            ProductVM productVM = new ProductVM()
+            {
+                Product = new Product(),
+                CategorySelectList = _prodRepo.GetAllDropdownList(WebConstant.CategoryName),
+                ApplicationTypeSelectList = _prodRepo.GetAllDropdownList(WebConstant.ApplicationTypeName),
+            };
+
             if (id == null)
             {
-                return View(productVm);
+                //this is for create
+                return View(productVM);
             }
             else
             {
-                productVm.Product = _db.Product.Find(id);
-                if (productVm.Product == null)
+                productVM.Product = _prodRepo.Find(id.GetValueOrDefault());
+                if (productVM.Product == null)
                 {
                     return NotFound();
                 }
-
-                return View(productVm);
+                return View(productVM);
             }
-           
         }
 
 
-        ////POST - UpSert
+        //POST - UPSERT
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult UpSert(ProductVM productVm)
+        public IActionResult Upsert(ProductVM productVM)
         {
             if (ModelState.IsValid)
             {
-
                 var files = HttpContext.Request.Form.Files;
                 string webRootPath = _webHostEnvironment.WebRootPath;
 
-                if (productVm.Product.Id == 0)
+                if (productVM.Product.Id == 0)
                 {
+                    //Creating
                     string upload = webRootPath + WebConstant.ImagePath;
                     string fileName = Guid.NewGuid().ToString();
                     string extension = Path.GetExtension(files[0].FileName);
@@ -108,13 +104,15 @@ namespace E_Commerce.Controllers
                         files[0].CopyTo(fileStream);
                     }
 
-                    productVm.Product.Image = fileName + extension;
-                    _db.Product.Add(productVm.Product);
+                    productVM.Product.Image = fileName + extension;
 
+                    _prodRepo.Add(productVM.Product);
                 }
                 else
                 {
-                    var objFromDb = _db.Product.AsNoTracking().FirstOrDefault(u => u.Id == productVm.Product.Id);
+                    //updating
+                    var objFromDb = _prodRepo.FirstOrDefault(u => u.Id == productVM.Product.Id, isTracking: false);
+
                     if (files.Count > 0)
                     {
                         string upload = webRootPath + WebConstant.ImagePath;
@@ -133,55 +131,37 @@ namespace E_Commerce.Controllers
                             files[0].CopyTo(fileStream);
                         }
 
-                        productVm.Product.Image = fileName + extension;
+                        productVM.Product.Image = fileName + extension;
                     }
-
                     else
                     {
-                        productVm.Product.Image = objFromDb.Image;
+                        productVM.Product.Image = objFromDb.Image;
                     }
-
-                    _db.Product.Update(productVm.Product);
+                    _prodRepo.Update(productVM.Product);
                 }
+                TempData[WebConstant.Success] = "Action completed successfully";
 
-                _db.SaveChanges();
-
+                _prodRepo.Save();
                 return RedirectToAction("Index");
             }
+            productVM.CategorySelectList = _prodRepo.GetAllDropdownList(WebConstant.CategoryName);
+            productVM.ApplicationTypeSelectList = _prodRepo.GetAllDropdownList(WebConstant.ApplicationTypeName);
 
-            productVm.CategorySelectList = _db.Category.Select(i => new SelectListItem
-            {
-                Text = i.Name,
-                Value = i.Id.ToString()
-            });
-            productVm.ApplicationTypeSelectList = _db.ApplicationType.Select(i => new SelectListItem
-            {
-                Text = i.Name,
-                Value = i.Id.ToString()
-            });
-
-            return View(productVm);
-
-
+            return View(productVM);
 
         }
-
-
 
 
 
         //GET - DELETE
         public IActionResult Delete(int? id)
         {
-
             if (id == null || id == 0)
             {
                 return NotFound();
             }
-
-            Product product = _db.Product.Include(u => u.Category).Include(u => u.ApplicationType).FirstOrDefault(u => u.Id ==id);
+            Product product = _prodRepo.FirstOrDefault(u => u.Id == id, includeProperties: "Category,ApplicationType");
             //product.Category = _db.Category.Find(product.CategoryId);
-
             if (product == null)
             {
                 return NotFound();
@@ -190,22 +170,18 @@ namespace E_Commerce.Controllers
             return View(product);
         }
 
-
-       // POST - DELETE
+        //POST - DELETE
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public IActionResult DeletePost(int? id)
         {
-            var obj = _db.Product.Find(id);
+            var obj = _prodRepo.Find(id.GetValueOrDefault());
             if (obj == null)
             {
                 return NotFound();
             }
 
-
             string upload = _webHostEnvironment.WebRootPath + WebConstant.ImagePath;
-           
-
             var oldFile = Path.Combine(upload, obj.Image);
 
             if (System.IO.File.Exists(oldFile))
@@ -213,14 +189,14 @@ namespace E_Commerce.Controllers
                 System.IO.File.Delete(oldFile);
             }
 
-            _db.Product.Remove(obj);
-            _db.SaveChanges();
+
+            _prodRepo.Remove(obj);
+            _prodRepo.Save();
+            TempData[WebConstant.Success] = "Action completed successfully";
             return RedirectToAction("Index");
 
 
-
         }
-
 
     }
 

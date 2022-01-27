@@ -1,4 +1,4 @@
-﻿using E_Commerce.Models;
+﻿using Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System;
@@ -6,53 +6,55 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
-using E_Commerce.Data;
-using E_Commerce.Models.ViewModels;
-using E_Commerce.Utility;
+using DataAccess.Data;
+using Models.ViewModels;
 using Microsoft.EntityFrameworkCore;
+using Utility;
+using DataAccess.Repository.IRepository;
 
 namespace E_Commerce.Controllers
 {
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
-        private readonly ApplicationDbContext _db;
+        private readonly IProductRepository _prodRepo;
+        private readonly ICategoryRepository _catRepo;
 
-        public HomeController(ILogger<HomeController> logger, ApplicationDbContext db)
+        public HomeController(ILogger<HomeController> logger, IProductRepository prodRepo,
+            ICategoryRepository catRepo)
         {
             _logger = logger;
-            _db = db;
+            _prodRepo = prodRepo;
+            _catRepo = catRepo;
         }
 
         public IActionResult Index()
         {
             HomeVM homeVM = new HomeVM()
             {
-                Products = _db.Product.Include(u => u.Category).Include(u => u.ApplicationType),
-                Categories = _db.Category
+                Products = _prodRepo.GetAll(includeProperties: "Category,ApplicationType"),
+                Categories = _catRepo.GetAll()
             };
             return View(homeVM);
         }
-
 
         public IActionResult Details(int id)
         {
             List<ShoppingCart> shoppingCartList = new List<ShoppingCart>();
             if (HttpContext.Session.Get<IEnumerable<ShoppingCart>>(WebConstant.SessionCart) != null
                 && HttpContext.Session.Get<IEnumerable<ShoppingCart>>(WebConstant.SessionCart).Any())
-                //HttpContext.Session.Get<IEnumerable<ShoppingCart>>(WebConstant.SessionCart).Count() > 0)
             {
                 shoppingCartList = HttpContext.Session.Get<List<ShoppingCart>>(WebConstant.SessionCart);
             }
 
-            var DetailsVM = new DetailsVM()
+
+
+            DetailsVM DetailsVM = new DetailsVM()
             {
-                Product = _db.Product.Include(u => u.Category)
-                    .Include(u => u.ApplicationType).FirstOrDefault(u => u.Id == id),
+                Product = _prodRepo.FirstOrDefault(u => u.Id == id, includeProperties: "Category,ApplicationType"),
                 ExistsInCart = false
-                //Product = _db.Product.Include(u => u.Category).Include(u => u.ApplicationType)
-                //    .Where(u => u.Id == id).FirstOrDefault(),
             };
+
 
             foreach (var item in shoppingCartList)
             {
@@ -61,34 +63,23 @@ namespace E_Commerce.Controllers
                     DetailsVM.ExistsInCart = true;
                 }
             }
+
             return View(DetailsVM);
         }
 
-
         [HttpPost, ActionName("Details")]
-        public IActionResult DetailsPost(int id)
+        public IActionResult DetailsPost(int id, DetailsVM detailsVM)
         {
             List<ShoppingCart> shoppingCartList = new List<ShoppingCart>();
             if (HttpContext.Session.Get<IEnumerable<ShoppingCart>>(WebConstant.SessionCart) != null
                 && HttpContext.Session.Get<IEnumerable<ShoppingCart>>(WebConstant.SessionCart).Any())
-                //HttpContext.Session.Get<IEnumerable<ShoppingCart>>(WebConstant.SessionCart).Count() > 0)
             {
                 shoppingCartList = HttpContext.Session.Get<List<ShoppingCart>>(WebConstant.SessionCart);
             }
-            shoppingCartList.Add(new ShoppingCart { ProductId = id });
+            shoppingCartList.Add(new ShoppingCart { ProductId = id, SqFt = detailsVM.Product.TempSqFt });
             HttpContext.Session.Set(WebConstant.SessionCart, shoppingCartList);
+            TempData[WebConstant.Success] = "Item add to cart successfully";
             return RedirectToAction(nameof(Index));
-        }
-
-        public IActionResult Privacy()
-        {
-            return View();
-        }
-
-        [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
-        public IActionResult Error()
-        {
-            return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
         }
 
         public IActionResult RemoveFromCart(int id)
@@ -107,8 +98,19 @@ namespace E_Commerce.Controllers
             }
 
             HttpContext.Session.Set(WebConstant.SessionCart, shoppingCartList);
+            TempData[WebConstant.Success] = "Item removed from cart successfully";
             return RedirectToAction(nameof(Index));
         }
 
+        public IActionResult Privacy()
+        {
+            return View();
+        }
+
+        [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
+        public IActionResult Error()
+        {
+            return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+        }
     }
 }

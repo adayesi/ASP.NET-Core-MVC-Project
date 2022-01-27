@@ -3,9 +3,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using E_Commerce.Data;
-using E_Commerce.Models;
+using DataAccess.Data;
 using Microsoft.AspNetCore.Authorization;
+using Models;
+using Utility;
+using DataAccess.Repository.IRepository;
 
 namespace E_Commerce.Controllers
 {
@@ -13,22 +15,24 @@ namespace E_Commerce.Controllers
     public class CategoryController : Controller
     {
 
-        private readonly ApplicationDbContext _db;
+        private readonly ICategoryRepository _catRepo;
 
-        public CategoryController(ApplicationDbContext db)
+        public CategoryController(ICategoryRepository catRepo)
         {
-            _db = db;
+            _catRepo = catRepo;
         }
+
+
         public IActionResult Index()
         {
-            IEnumerable<Category> objList = _db.Category;
+            IEnumerable<Category> objList = _catRepo.GetAll();
             return View(objList);
         }
+
 
         //GET - CREATE
         public IActionResult Create()
         {
-           
             return View();
         }
 
@@ -40,27 +44,25 @@ namespace E_Commerce.Controllers
         {
             if (ModelState.IsValid)
             {
-                _db.Category.Add(obj);
-                _db.SaveChanges();
+                _catRepo.Add(obj);
+                _catRepo.Save();
+                TempData[WebConstant.Success] = "Category created successfully";
                 return RedirectToAction("Index");
             }
-
+            TempData[WebConstant.Error] = "Error while creating category";
             return View(obj);
-
-
 
         }
 
 
-        //GET - Edit
+        //GET - EDIT
         public IActionResult Edit(int? id)
         {
             if (id == null || id == 0)
             {
                 return NotFound();
             }
-
-            var obj = _db.Category.Find(id);
+            var obj = _catRepo.Find(id.GetValueOrDefault());
             if (obj == null)
             {
                 return NotFound();
@@ -69,7 +71,6 @@ namespace E_Commerce.Controllers
             return View(obj);
         }
 
-
         //POST - EDIT
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -77,14 +78,12 @@ namespace E_Commerce.Controllers
         {
             if (ModelState.IsValid)
             {
-                _db.Category.Update(obj);
-                _db.SaveChanges();
+                _catRepo.Update(obj);
+                _catRepo.Save();
+                TempData[WebConstant.Success] = "Action completed successfully";
                 return RedirectToAction("Index");
             }
-
             return View(obj);
-
-
 
         }
 
@@ -95,8 +94,7 @@ namespace E_Commerce.Controllers
             {
                 return NotFound();
             }
-
-            var obj = _db.Category.Find(id);
+            var obj = _catRepo.Find(id.GetValueOrDefault());
             if (obj == null)
             {
                 return NotFound();
@@ -105,24 +103,20 @@ namespace E_Commerce.Controllers
             return View(obj);
         }
 
-
         //POST - DELETE
         [HttpPost]
         [ValidateAntiForgeryToken]
         public IActionResult DeletePost(int? id)
         {
-            var obj = _db.Category.Find(id);
+            var obj = _catRepo.Find(id.GetValueOrDefault());
             if (obj == null)
             {
                 return NotFound();
             }
-
-            _db.Category.Remove(obj);
-            _db.SaveChanges();
+            TempData[WebConstant.Success] = "Action completed successfully";
+            _catRepo.Remove(obj);
+            _catRepo.Save();
             return RedirectToAction("Index");
-            
-        
-
         }
     }
 
